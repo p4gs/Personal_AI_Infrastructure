@@ -1,4 +1,5 @@
 # Windows 11 Support — Development & Testing Rules
+<!-- Last reviewed: 2026-02-22 -->
 
 > **Read this before making ANY changes to Windows compatibility code.**
 > These rules ensure cross-platform quality and prevent regressions.
