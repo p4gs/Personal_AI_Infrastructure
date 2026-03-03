@@ -333,10 +333,13 @@ async function main() {
 
   // PAI and Algorithm versions
   const paiVersion = settings?.pai?.version || '—';
-  const algoLatestFile = join(PAI_DIR, 'skills', 'PAI', 'Components', 'Algorithm', 'LATEST');
+  // Algorithm version: primary path PAI/Algorithm/LATEST, fallback to legacy skills path
+  const algoPrimaryFile = join(PAI_DIR, 'PAI', 'Algorithm', 'LATEST');
+  const algoLegacyFile = join(PAI_DIR, 'skills', 'PAI', 'Components', 'Algorithm', 'LATEST');
   let algoVersion = '—';
   try {
-    algoVersion = require('fs').readFileSync(algoLatestFile, 'utf-8').trim().replace(/^v/i, '') || '—';
+    const algoFile = fileExists(algoPrimaryFile) ? algoPrimaryFile : algoLegacyFile;
+    algoVersion = require('fs').readFileSync(algoFile, 'utf-8').trim().replace(/^v/i, '') || '—';
   } catch {}
 
   // Extract input data
