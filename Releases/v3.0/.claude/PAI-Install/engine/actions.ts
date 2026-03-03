@@ -1166,6 +1166,15 @@ export async function runVoiceSetup(
         symlinkSync(envPath, sp);
       } catch { /* non-fatal */ }
     }
+
+    // Restart voice server so it picks up the newly-saved ElevenLabs API key.
+    // The server caches ELEVENLABS_API_KEY at startup from ~/.env, so it must
+    // be restarted after the key is written — otherwise it falls back to Edge TTS.
+    if (voiceServerReady) {
+      await emit({ event: "progress", step: "voice", percent: 70, detail: "Restarting voice server with ElevenLabs key..." });
+      await stopVoiceServer(emit);
+      await startVoiceServer(paiDir, emit);
+    }
   }
 
   // ── Test TTS and confirm with user ──

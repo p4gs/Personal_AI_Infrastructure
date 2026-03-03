@@ -250,6 +250,25 @@
             "command": "bun ${PAI_DIR}/hooks/CheckVersion.hook.ts"
           }
         ]
+      },
+      {
+        "matcher": "compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun ${PAI_DIR}/hooks/PostCompactRecovery.hook.ts"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun ${PAI_DIR}/hooks/PreCompact.hook.ts"
+          }
+        ]
       }
     ],
     "Stop": [
