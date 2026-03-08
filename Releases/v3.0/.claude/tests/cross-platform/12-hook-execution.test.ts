@@ -1,7 +1,7 @@
 /**
  * 12-hook-execution.test.ts — Hook Execution with Event-Type Inputs (Cross-Platform Suite)
  *
- * Executes ALL 20 hooks with event-type-appropriate JSON stdin:
+ * Executes ALL 22 hooks with event-type-appropriate JSON stdin:
  *   - Each hook receives the correct input shape for its primary event type
  *   - Validates exit codes (0 or 1, never null/crash)
  *   - Checks stderr for fatal crash indicators (panic, SIGSEGV)
@@ -28,14 +28,23 @@ import {
 
 // ─── Hook-to-Event-Type Mapping ──────────────────────────────────────────────
 
+/** PreCompact event input */
+const PRECOMPACT_INPUT = {
+  session_id: 'test-ci-00000000',
+  trigger: 'auto',
+  custom_instructions: '',
+};
+
 /**
- * Maps each of the 20 hook files to its primary event type input.
+ * Maps each of the 22 hook files to its primary event type input.
  * Each hook receives the JSON stdin shape matching the event that triggers it.
  */
 const HOOK_EVENT_MAP: Record<string, Record<string, unknown>> = {
   'StartupGreeting.hook.ts': SESSION_START_INPUT,
   'LoadContext.hook.ts': SESSION_START_INPUT,
   'CheckVersion.hook.ts': SESSION_START_INPUT,
+  'PostCompactRecovery.hook.ts': SESSION_START_INPUT,
+  'PreCompact.hook.ts': PRECOMPACT_INPUT,
   'SkillGuard.hook.ts': PRE_TOOL_USE_INPUT,
   'RelationshipMemory.hook.ts': USER_PROMPT_INPUT,
   'AutoWorkCreation.hook.ts': USER_PROMPT_INPUT,
@@ -77,6 +86,7 @@ function groupByEventType(): Record<string, string[]> {
     PostToolUse: [],
     SessionEnd: [],
     Stop: [],
+    PreCompact: [],
   };
 
   for (const [hook, input] of Object.entries(HOOK_EVENT_MAP)) {
@@ -86,6 +96,7 @@ function groupByEventType(): Record<string, string[]> {
     else if (input === POST_TOOL_USE_INPUT) groups.PostToolUse.push(hook);
     else if (input === SESSION_END_INPUT) groups.SessionEnd.push(hook);
     else if (input === STOP_INPUT) groups.Stop.push(hook);
+    else if (input === PRECOMPACT_INPUT) groups.PreCompact.push(hook);
   }
 
   return groups;
@@ -96,9 +107,9 @@ const EVENT_GROUPS = groupByEventType();
 // ─── Section 1: Coverage Check ───────────────────────────────────────────────
 
 describe('Hook Coverage', () => {
-  test('HOOK_EVENT_MAP covers all 20 hooks', () => {
+  test('HOOK_EVENT_MAP covers all 22 hooks', () => {
     const mapped = Object.keys(HOOK_EVENT_MAP).sort();
-    expect(mapped.length).toBe(20);
+    expect(mapped.length).toBe(22);
   });
 
   test('every discovered hook file has a mapping', () => {
