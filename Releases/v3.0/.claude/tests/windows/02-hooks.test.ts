@@ -30,7 +30,7 @@ import {
 
 describe('Hook Loading', () => {
   test('should have exactly 20 hooks', () => {
-    expect(ALL_HOOKS.length).toBe(20);
+    expect(ALL_HOOKS.length).toBe(22);
   });
 
   for (const hook of ALL_HOOKS) {

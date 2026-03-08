@@ -16,6 +16,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync, appendFileSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
+import { readStdinWithTimeout } from "./lib/stdin";
 
 const HOME = homedir();
 const PAI_DIR = join(HOME, ".claude");
@@ -24,10 +25,10 @@ const STATE_DIR = join(PAI_DIR, "MEMORY", "STATE");
 const SNAPSHOT_PATH = join(STATE_DIR, "identity-snapshot.json");
 const LOG_PATH = join(STATE_DIR, "compaction-log.jsonl");
 
-// Read hook input from stdin
+// Read hook input from stdin (cross-platform)
 let input: { trigger?: string; session_id?: string; custom_instructions?: string } = {};
 try {
-  const stdin = await Bun.stdin.text();
+  const stdin = await readStdinWithTimeout();
   if (stdin.trim()) {
     input = JSON.parse(stdin);
   }
