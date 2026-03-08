@@ -101,25 +101,23 @@ notepad $PROFILE
 function pai { bun "$HOME\.claude\skills\PAI\Tools\pai.ts" @args }
 ```
 
-## Known Limitations (Native Windows)
+## Windows Compatibility Notes
 
-### Hook Execution (Upstream Blocker)
+### Hook Execution
 
-Claude Code currently executes hooks via `bash -c "command"`. On native Windows, this fails because bash is not a native Windows tool. This is tracked as upstream issue [#22700](https://github.com/anthropics/claude-code/issues/22700).
+Claude Code executes hooks via Git Bash on Windows. Git Bash is bundled with Git for Windows, which is a prerequisite for PAI. The `${PAI_DIR}` variable expansion in `settings.json` hook commands (e.g., `bun ${PAI_DIR}/hooks/VoiceGate.hook.ts`) is handled by Claude Code internally before passing to the shell.
 
-**Status:** This is an **upstream dependency on Anthropic** — Claude Code needs to add native PowerShell/cmd.exe hook execution support. PAI's platform abstractions are fully validated and ready (113/113 smoke test), but hooks cannot execute until Claude Code supports native Windows shell execution.
-
-**Our position:** We do NOT work around this by requiring Git Bash or any Unix shell emulator. PAI targets TRUE NATIVE Windows 11. The correct fix is for Claude Code to support `powershell.exe -Command "command"` or `cmd.exe /c "command"` as alternatives to `bash -c`.
-
-### `${PAI_DIR}` in Hook Commands
-
-The `settings.json` hook commands use `${PAI_DIR}/hooks/MyHook.ts` syntax. This is bash-specific variable expansion. On native Windows, environment variables use `%PAI_DIR%` (cmd.exe) or `$env:PAI_DIR` (PowerShell).
-
-**Status:** This is part of the hook execution upstream blocker above. When Claude Code adds native Windows hook support, they will also need to handle platform-appropriate env var expansion in command strings. There is also an open feature request (#4276) for Claude Code to perform internal `${VAR}` pre-substitution before passing commands to any shell.
+PAI also provides `expandEnvVars()` in `lib/platform.ts` for any PAI code that needs to expand `${VAR}` (Unix-style) or `%VAR%` (Windows-style) environment variables in command strings at runtime.
 
 ### Voice Server
 
-The voice server (ElevenLabs TTS) uses `launchctl` on macOS and `systemd` on Linux. On Windows, it would use Task Scheduler, but this integration is not yet implemented. Voice features are deferred for the initial Windows release.
+The voice server supports all three platforms via `VoiceServer/manage.ts`:
+- **macOS:** `launchctl` with LaunchAgent plist (auto-start at login, restart on failure)
+- **Linux:** `systemd` user service (auto-start, restart on failure)
+- **Windows:** Task Scheduler via `schtasks.exe` (runs at logon, with fallback to direct spawn)
+- **WSL:** Background process with shell profile auto-start suggestion
+
+Usage: `bun VoiceServer/manage.ts install|start|stop|restart|status|uninstall`
 
 ### Kitty Terminal
 
@@ -158,7 +156,7 @@ winget install Oven-sh.Bun
 ```
 
 ### Hooks fail with "bash not recognized"
-This is an upstream Claude Code limitation — hooks currently require bash. This is tracked as [issue #22700](https://github.com/anthropics/claude-code/issues/22700). PAI's platform abstractions work correctly on native Windows; the blocker is Claude Code's hook execution engine. Check for updates to Claude Code that add PowerShell hook support.
+Claude Code uses Git Bash for hook execution on Windows. Ensure Git for Windows is installed (`winget install Git.Git`) and that Git Bash is on your PATH. Restart your terminal after installation.
 
 ### Settings.json not found
 Verify PAI_DIR is set correctly:

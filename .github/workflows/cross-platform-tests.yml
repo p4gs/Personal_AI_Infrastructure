@@ -91,6 +91,12 @@ jobs:
           PAI_TEST_MODE: "1"
         run: bun test tests/cross-platform/ --timeout 60000
 
+      - name: Run voice service management tests
+        working-directory: Releases/v3.0/.claude
+        env:
+          PAI_TEST_MODE: "1"
+        run: bun test tests/cross-platform/25-voice-service-mgmt.test.ts tests/cross-platform/26-env-var-expansion.test.ts --timeout 30000
+
       - name: Run forbidden pattern audit
         working-directory: Releases/v3.0/.claude
         run: bun test tests/windows/07-forbidden-patterns.test.ts --timeout 60000

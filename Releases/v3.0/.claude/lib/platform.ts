@@ -435,7 +435,38 @@ export function getDeleteFileCommand(filePath: string): { command: string; args:
   return { command: 'rm', args: ['-f', filePath] };
 }
 
-// ─── Section 6: Service Management ─────────────────────────────────────────
+// ─── Section 6: Environment Variable Expansion ─────────────────────────────
+
+/**
+ * Expand environment variables in a string.
+ *
+ * Supports:
+ *   - ${VAR} syntax (Unix/Claude Code standard) — expanded on all platforms
+ *   - %VAR% syntax (Windows cmd.exe) — expanded only on Windows
+ *
+ * Undefined variables are replaced with empty string.
+ * Expansion is single-pass (no recursive expansion).
+ * Empty var names (${}) and malformed patterns (${UNCLOSED) are left as-is.
+ */
+export function expandEnvVars(str: string): string {
+  // First pass: expand ${VAR} syntax (all platforms)
+  let result = str.replace(/\$\{([^}]+)\}/g, (_match, varName: string) => {
+    if (!varName) return _match;
+    return process.env[varName] ?? '';
+  });
+
+  // Second pass: expand %VAR% syntax (Windows only)
+  if (isWindows) {
+    result = result.replace(/%([^%]+)%/g, (_match, varName: string) => {
+      if (!varName) return _match;
+      return process.env[varName] ?? '';
+    });
+  }
+
+  return result;
+}
+
+// ─── Section 7: Service Management ─────────────────────────────────────────
 
 /** Service manager type for the current platform */
 export type ServiceManagerType = 'launchctl' | 'systemd' | 'task-scheduler' | 'none';

@@ -150,13 +150,14 @@ describe('Platform Audit — Structural Checks', () => {
     }
   });
 
-  test('platform.ts has all 6 sections', () => {
+  test('platform.ts has all 7 sections', () => {
     const content = readFileSync(PLATFORM_TS, 'utf-8');
     expect(content).toContain('Section 1: OS Detection');
     expect(content).toContain('Section 2: Path Resolution');
     expect(content).toContain('Section 3: Command Mapping');
     expect(content).toContain('Section 4: Terminal Detection');
     expect(content).toContain('Section 5: Audio & Notifications');
-    expect(content).toContain('Section 6: Service Management');
+    expect(content).toContain('Section 6: Environment Variable Expansion');
+    expect(content).toContain('Section 7: Service Management');
   });
 });
