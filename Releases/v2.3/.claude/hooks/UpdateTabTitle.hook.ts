@@ -307,7 +307,17 @@ async function main() {
   try {
     console.error('[UpdateTabTitle] Hook started');
     const input = await readStdinWithTimeout();
-    const data: HookInput = JSON.parse(input);
+    if (!input.trim()) {
+      console.error('[UpdateTabTitle] Empty stdin, exiting');
+      process.exit(0);
+    }
+    let data: HookInput;
+    try {
+      data = JSON.parse(input);
+    } catch {
+      console.error('[UpdateTabTitle] Invalid JSON on stdin, exiting');
+      process.exit(0);
+    }
     const prompt = data.prompt || '';
     console.error(`[UpdateTabTitle] Prompt: "${prompt.slice(0, 50)}..."`);
 

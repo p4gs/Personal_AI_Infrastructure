@@ -394,7 +394,17 @@ async function main() {
   try {
     console.error('[ImplicitSentimentCapture] Hook started');
     const input = await readStdinWithTimeout();
-    const data: HookInput = JSON.parse(input);
+    if (!input.trim()) {
+      console.error('[ImplicitSentimentCapture] Empty stdin, exiting');
+      process.exit(0);
+    }
+    let data: HookInput;
+    try {
+      data = JSON.parse(input);
+    } catch {
+      console.error('[ImplicitSentimentCapture] Invalid JSON on stdin, exiting');
+      process.exit(0);
+    }
     // The payload uses 'prompt' (Claude Code) - user_prompt is legacy
     const prompt = data.prompt || data.user_prompt || '';
 
