@@ -26,12 +26,13 @@
 import { parseArgs } from "util";
 import * as fs from "fs";
 import * as path from "path";
+import { homedir } from "node:os"
 
 // ============================================================================
 // Configuration
 // ============================================================================
 
-const HOME = process.env.HOME!;
+const HOME = homedir();
 const PAI_DIR = process.env.PAI_DIR || path.join(HOME, ".claude", "PAI");
 const KNOWLEDGE_DIR = path.join(PAI_DIR, "MEMORY", "KNOWLEDGE");
 const DOMAINS = ["People", "Companies", "Ideas", "Research"];

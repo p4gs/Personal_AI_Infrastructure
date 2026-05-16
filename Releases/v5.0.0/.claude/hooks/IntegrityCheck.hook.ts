@@ -11,6 +11,7 @@
 
 import { parseTranscript } from '../PAI/TOOLS/TranscriptParser';
 import { handleSystemIntegrity } from './handlers/SystemIntegrity';
+import { readStdinWithTimeout } from './lib/stdin';
 
 interface HookInput {
   session_id: string;
@@ -20,18 +21,8 @@ interface HookInput {
 
 async function readStdin(): Promise<HookInput | null> {
   try {
-    const decoder = new TextDecoder();
-    const reader = Bun.stdin.stream().getReader();
-    let input = '';
-    const timeout = new Promise<void>(r => setTimeout(r, 500));
-    const read = (async () => {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        input += decoder.decode(value, { stream: true });
-      }
-    })();
-    await Promise.race([read, timeout]);
+    // Cross-platform stdin (process.stdin, not Bun.stdin) — see lib/stdin.ts.
+    const input = await readStdinWithTimeout(500);
     if (input.trim()) return JSON.parse(input) as HookInput;
   } catch {}
   return null;

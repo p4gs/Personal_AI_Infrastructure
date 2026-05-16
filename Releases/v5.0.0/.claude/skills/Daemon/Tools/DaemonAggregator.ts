@@ -18,10 +18,11 @@
 import { readFileSync, existsSync, writeFileSync, readdirSync, statSync } from "fs";
 import { join, resolve } from "path";
 import { filterContent, filterDaemonData, loadSecurityOverrides } from "./SecurityFilter.ts";
+import { homedir } from "node:os"
 
 // ─── Path Resolution ───
 
-const HOME = process.env.HOME || process.env.USERPROFILE || "";
+const HOME = homedir() || process.env.USERPROFILE || "";
 const PAI_DIR = process.env.PAI_DIR || join(HOME, ".claude", "PAI");
 const USER_DIR = join(PAI_DIR, "USER");
 const MEMORY_DIR = join(PAI_DIR, "MEMORY");

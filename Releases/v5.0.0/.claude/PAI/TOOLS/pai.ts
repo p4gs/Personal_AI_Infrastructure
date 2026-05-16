@@ -323,18 +323,43 @@ function setWallpaper(filename: string): boolean {
     log("Kitty not available", "⚠️");
   }
 
-  // Set macOS desktop background
-  try {
-    const script = `tell application "System Events" to tell every desktop to set picture to "${fullPath}"`;
-    const macResult = spawnSync(["osascript", "-e", script]);
-    if (macResult.exitCode === 0) {
-      log("macOS desktop set", "✅");
-    } else {
-      log("Failed to set macOS desktop", "⚠️");
-      success = false;
+  if (process.platform === "win32") {
+    // Windows: SystemParametersInfo via PowerShell Add-Type + P/Invoke
+    try {
+      const psCommand = [
+        "Add-Type -TypeDefinition @'",
+        "using System; using System.Runtime.InteropServices;",
+        "public class Wallpaper {",
+        "  [DllImport(\"user32.dll\", CharSet=CharSet.Auto)]",
+        "  public static extern int SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);",
+        "}",
+        "'@",
+        `[Wallpaper]::SystemParametersInfo(20, 0, '${fullPath.replace(/\\/g, "\\\\")}', 3)`,
+      ].join("\n");
+      const winResult = spawnSync(["powershell.exe", "-NoProfile", "-Command", psCommand]);
+      if (winResult.exitCode === 0) {
+        log("Windows desktop background set", "✅");
+      } else {
+        log("Failed to set Windows desktop background", "⚠️");
+        success = false;
+      }
+    } catch {
+      log("Could not set Windows desktop background", "⚠️");
     }
-  } catch {
-    log("Could not set macOS desktop", "⚠️");
+  } else if (process.platform === "darwin") {
+    // Set macOS desktop background
+    try {
+      const script = `tell application "System Events" to tell every desktop to set picture to "${fullPath}"`;
+      const macResult = spawnSync(["osascript", "-e", script]);
+      if (macResult.exitCode === 0) {
+        log("macOS desktop set", "✅");
+      } else {
+        log("Failed to set macOS desktop", "⚠️");
+        success = false;
+      }
+    } catch {
+      log("Could not set macOS desktop", "⚠️");
+    }
   }
 
   return success;

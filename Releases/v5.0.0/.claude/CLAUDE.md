@@ -1,5 +1,7 @@
 # PAI 5.0.0 — Personal AI Infrastructure (the Life Operating System)
 
+> **Windows users:** This installation runs on Windows 11 natively. Use `Bootstrap.bat` to install. All paths use `os.homedir()` (cross-platform). Pulse runs as a Task Scheduler job — manage with `PAI\PULSE\manage.ps1`. Shell hooks run via `bun` (not bash). See `install.ps1` for full setup details.
+
 > **PAI is the Life OS. {DA_IDENTITY.NAME} is {PRINCIPAL.NAME}'s DA. Pulse is the Life Dashboard.**
 > Canonical thesis: `PAI/DOCUMENTATION/LifeOs/LifeOsThesis.md`. Everyone running PAI names their own DA; {DA_IDENTITY.NAME} is {PRINCIPAL.NAME}'s specific instantiation. PAI targets AS3 on the [PAI Maturity Model](https://your-domain.example.com/blog/personal-ai-maturity-model), with lineage from [The Real Internet of Things](https://your-domain.example.com/blog/the-real-internet-of-things) (2016).
 

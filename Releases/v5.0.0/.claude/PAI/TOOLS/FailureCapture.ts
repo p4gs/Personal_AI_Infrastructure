@@ -28,8 +28,9 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, copyFileSync } from 'fs';
 import { join, basename } from 'path';
 import { inference } from './Inference';
+import { homedir } from "node:os"
 
-const PAI_DIR = process.env.PAI_DIR || join(process.env.HOME!, '.claude');
+const PAI_DIR = process.env.PAI_DIR || join(homedir(), '.claude');
 
 interface FailureCaptureInput {
   transcriptPath: string;

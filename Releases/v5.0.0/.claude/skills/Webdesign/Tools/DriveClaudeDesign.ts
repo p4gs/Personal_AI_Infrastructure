@@ -11,6 +11,7 @@ Thin Interceptor wrapper. UI targeting uses loud accessibility-tree heuristics.
 */
 import { mkdir, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
+import { tmpdir } from "node:os";
 
 type TreeNode = { ref?: string; role?: string; name?: string; text?: string; contenteditable?: boolean | string; children?: TreeNode[] };
 
@@ -48,7 +49,7 @@ function labelOf(n: TreeNode): string {
 }
 
 async function dumpMiss(raw: string): Promise<never> {
-  const out = `/tmp/claude-design-tree-${Date.now()}.json`;
+  const out = join(tmpdir(), `claude-design-tree-${Date.now()}.json`);
   await writeFile(out, raw);
   console.error(`Claude Design control heuristic missed; tree dumped to ${out}`);
   process.exit(3);

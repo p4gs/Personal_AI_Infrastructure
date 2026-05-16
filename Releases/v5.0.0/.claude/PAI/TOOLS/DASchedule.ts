@@ -12,8 +12,9 @@
 
 import { join } from "path"
 import { readFileSync, writeFileSync, appendFileSync, existsSync, mkdirSync } from "fs"
+import { homedir } from "node:os"
 
-const HOME = process.env.HOME ?? "~"
+const HOME = homedir()
 const PAI_DIR = join(HOME, ".claude", "PAI")
 const TASKS_DIR = join(PAI_DIR, "Pulse", "state", "da")
 const TASKS_PATH = join(TASKS_DIR, "scheduled-tasks.jsonl")

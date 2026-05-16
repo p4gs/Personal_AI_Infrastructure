@@ -22,8 +22,9 @@
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync, mkdirSync, appendFileSync } from "fs";
 import { join, basename, dirname, extname } from "path";
 import { randomUUID } from "crypto";
+import { homedir } from "node:os"
 
-const HOME = process.env.HOME || "";
+const HOME = homedir() || "";
 const PAI_DIR = process.env.PAI_DIR || join(HOME, ".claude", "PAI");
 const QUEUE_FILE = join(PAI_DIR, "MEMORY", "MIGRATION", "migration-proposals.jsonl");
 

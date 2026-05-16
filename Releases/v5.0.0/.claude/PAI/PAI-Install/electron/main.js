@@ -12,11 +12,22 @@ const net = require("net");
 // Force autoplay at the Chromium level (belt + suspenders with webPreferences)
 app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
 
-const PORT = parseInt(process.env.PAI_INSTALL_PORT || "1337");
+const PREFERRED_PORT = parseInt(process.env.PAI_INSTALL_PORT || "1337");
 const INSTALLER_DIR = path.resolve(__dirname, "..");
 
 let serverProcess = null;
 let mainWindow = null;
+let activePort = PREFERRED_PORT;
+
+// Find a free TCP port starting from `preferred`.
+function findFreePort(preferred) {
+  return new Promise((resolve) => {
+    const srv = net.createServer();
+    srv.once("error", () => resolve(findFreePort(preferred + 1)));
+    srv.once("listening", () => srv.close(() => resolve(preferred)));
+    srv.listen(preferred, "127.0.0.1");
+  });
+}
 
 // ─── Single Instance Lock ────────────────────────────────────────
 // Prevents launching 20 copies of the installer
@@ -64,11 +75,11 @@ function waitForServer(port, timeout = 15000) {
 
 // ─── Start Bun server ────────────────────────────────────────────
 
-function startServer() {
+function startServer(port) {
   const mainTs = path.join(INSTALLER_DIR, "main.ts");
   serverProcess = spawn("bun", ["run", mainTs, "--mode", "web"], {
     cwd: INSTALLER_DIR,
-    env: { ...process.env, PAI_INSTALL_PORT: String(PORT) },
+    env: { ...process.env, PAI_INSTALL_PORT: String(port) },
     stdio: ["ignore", "pipe", "pipe"],
   });
 
@@ -110,7 +121,7 @@ function createWindow() {
     },
   });
 
-  mainWindow.loadURL(`http://127.0.0.1:${PORT}/`);
+  mainWindow.loadURL(`http://127.0.0.1:${activePort}/`);
 
   mainWindow.on("closed", () => {
     mainWindow = null;
@@ -120,10 +131,14 @@ function createWindow() {
 // ─── App Lifecycle ───────────────────────────────────────────────
 
 app.whenReady().then(async () => {
-  startServer();
+  activePort = await findFreePort(PREFERRED_PORT);
+  if (activePort !== PREFERRED_PORT) {
+    console.log(`Port ${PREFERRED_PORT} in use, using ${activePort} instead`);
+  }
+  startServer(activePort);
 
   try {
-    await waitForServer(PORT);
+    await waitForServer(activePort);
   } catch (err) {
     console.error("Could not start installer server:", err.message);
     app.quit();

@@ -1,0 +1,229 @@
+name: Cross-Platform PAI Test Suite (v5.0.0)
+
+on:
+  pull_request:
+    paths:
+      - 'Releases/v5.0.0/.claude/**'
+      - '.github/workflows/cross-platform-tests.yml'
+  push:
+    branches:
+      - main
+      - 'feature/windows-*'
+    paths:
+      - 'Releases/v5.0.0/.claude/**'
+      - '.github/workflows/cross-platform-tests.yml'
+  workflow_dispatch:
+
+jobs:
+  # ─── Core Test Matrix (3 platforms) ──────────────────────────────────────────
+  test:
+    name: Tests (${{ matrix.os-label }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            os-label: Windows
+          - os: ubuntu-latest
+            os-label: Linux
+          - os: macos-latest
+            os-label: macOS
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+
+      - name: Install dependencies
+        working-directory: Releases/v5.0.0/.claude
+        run: bun install
+
+      - name: Install Playwright Chromium
+        working-directory: Releases/v5.0.0/.claude
+        run: npx playwright install chromium --with-deps
+
+      - name: Setup virtual audio (Linux only)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pulseaudio
+          pulseaudio --start --daemonize || true
+          pactl load-module module-null-sink sink_name=virtual_speaker || true
+
+      - name: Verify environment
+        run: |
+          bun --version
+          node --version
+          git --version
+
+      - name: Run platform unit tests
+        working-directory: Releases/v5.0.0/.claude
+        run: bun test lib/platform.test.ts lib/terminal.test.ts lib/platform-audit.test.ts --timeout 30000
+
+      - name: Run Windows E2E test suite
+        working-directory: Releases/v5.0.0/.claude
+        env:
+          ANTHROPIC_API_KEY: "sk-ant-dummy-ci-test-key"
+          OPENAI_API_KEY: "sk-dummy-ci-test-key"
+          APIFY_TOKEN: "apify_dummy_ci_token"
+          PAI_TEST_MODE: "1"
+        run: bun test tests/windows/ --timeout 30000
+
+      - name: Run cross-platform test suite
+        working-directory: Releases/v5.0.0/.claude
+        env:
+          ANTHROPIC_API_KEY: "sk-ant-dummy-ci-test-key"
+          OPENAI_API_KEY: "sk-dummy-ci-test-key"
+          APIFY_TOKEN: "apify_dummy_ci_token"
+          PAI_TEST_MODE: "1"
+        run: bun test tests/cross-platform/ --timeout 60000
+
+      - name: Run forbidden pattern audit
+        working-directory: Releases/v5.0.0/.claude
+        run: bun test tests/windows/07-forbidden-patterns.test.ts --timeout 60000
+
+  # ─── Windows Install E2E (Windows-only) ──────────────────────────────────────
+  windows-install-e2e:
+    name: Windows Install E2E
+    runs-on: windows-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Verify environment
+        run: |
+          bun --version
+          git --version
+          echo "OS: $env:OS"
+          echo "Platform: win32"
+
+      - name: Run installer E2E tests
+        working-directory: Releases/v5.0.0/.claude
+        run: bun test tests/windows/10-install-e2e.test.ts --timeout 60000
+
+      - name: Test installer detect module directly
+        working-directory: Releases/v5.0.0/.claude
+        run: |
+          bun -e "
+            const { detectSystem } = require('./PAI/PAI-Install/engine/detect');
+            const d = detectSystem();
+            console.log('Platform:', d.os.platform);
+            console.log('Home:', d.homeDir);
+            console.log('PAI Dir:', d.paiDir);
+            if (d.os.platform !== 'win32') {
+              console.error('FAIL: Expected win32 but got', d.os.platform);
+              process.exit(1);
+            }
+            console.log('PASS: Platform detection correct');
+          "
+
+      - name: Test configuration generation
+        working-directory: Releases/v5.0.0/.claude
+        run: |
+          bun -e "
+            const { generateSettingsJson } = require('./PAI/PAI-Install/engine/config-gen');
+            const os = require('os');
+            const path = require('path');
+            const config = generateSettingsJson({
+              principalName: 'CI-Test',
+              timezone: 'UTC',
+              aiName: 'TestAI',
+              catchphrase: 'Hello CI',
+              paiDir: path.join(os.tmpdir(), '.claude-ci-test'),
+              configDir: path.join(os.tmpdir(), '.config-ci-test'),
+            });
+            if (!config.principal || config.principal.name !== 'CI-Test') {
+              console.error('FAIL: Config generation incorrect');
+              process.exit(1);
+            }
+            console.log('PASS: Config generation correct');
+          "
+
+  # ─── Claude CLI E2E (full PAI stack test) ────────────────────────────────────
+  claude-e2e:
+    name: Claude CLI E2E (${{ matrix.os-label }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            os-label: Linux
+          - os: macos-latest
+            os-label: macOS
+          - os: windows-latest
+            os-label: Windows
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Setup PAI directory structure (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p ~/.claude
+          cp -r Releases/v5.0.0/.claude/* ~/.claude/
+          echo "PAI v5.0.0 files copied to ~/.claude/"
+
+      - name: Setup PAI directory structure (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          New-Item -ItemType Directory -Path "$env:USERPROFILE\.claude" -Force | Out-Null
+          Copy-Item -Path "Releases\v5.0.0\.claude\*" -Destination "$env:USERPROFILE\.claude\" -Recurse -Force
+          Write-Host "PAI v5.0.0 files copied to $env:USERPROFILE\.claude\"
+
+      - name: Configure PAI for CI
+        working-directory: Releases/v5.0.0/.claude
+        run: bun run tests/ci-setup-pai.ts --name CI-Tester --ai-name CI-PAI
+
+      - name: PAI Full Verification (~$0.10-0.50)
+        if: env.CLAUDE_CODE_OAUTH_TOKEN != ''
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          PAI_TEST_MODEL: claude-sonnet-4-6
+          PAI_TEST_MAX_TURNS: '8'
+        working-directory: Releases/v5.0.0/.claude
+        run: bun run tests/cross-platform/pai-verification.ts
+
+      - name: PAI verification skipped (no token)
+        if: env.CLAUDE_CODE_OAUTH_TOKEN == ''
+        run: echo "SKIPPED — CLAUDE_CODE_OAUTH_TOKEN secret not configured"

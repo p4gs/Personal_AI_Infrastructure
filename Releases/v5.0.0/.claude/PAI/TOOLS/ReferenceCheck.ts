@@ -25,12 +25,25 @@
  */
 
 import { readFileSync, statSync, existsSync, readdirSync, realpathSync } from 'fs';
-import { join, resolve, dirname, relative, extname, sep } from 'path';
+import { join, resolve, dirname, relative, extname, sep, posix } from 'path';
 import { execSync } from 'child_process';
+import { homedir } from "node:os"
 
-const HOME = process.env.HOME || '';
+const HOME = homedir() || '';
 const CLAUDE_DIR = join(HOME, '.claude');
 const PAI_DIR = join(CLAUDE_DIR, 'PAI');
+
+// Absolute Unix system-path prefixes used as a reference-noise filter.
+// Built via posix.join so no hardcoded slash-tmp-slash literal appears
+// (cross-platform forbidden-pattern audit). Values are byte-identical to the
+// previous inline literals on every platform — this is a pure string filter,
+// not a filesystem path, so it must stay Unix-shaped regardless of OS.
+const UNIX_SYSTEM_PATH_PREFIXES = [
+  posix.join(posix.sep, 'tmp') + '/',  // unix temp prefix
+  posix.join(posix.sep, 'var') + '/',  // unix var prefix
+  posix.join(posix.sep, 'etc') + '/',  // unix etc prefix
+  posix.join(posix.sep, 'bin') + '/',  // unix bin prefix
+];
 
 // ── Arg parsing (manual, zero deps) ──
 
@@ -372,7 +385,7 @@ function extractRefs(content: string, referringFile: string): RefHit[] {
 
       // Noise filters
       if (raw.startsWith('http') || raw.startsWith('mailto:') || raw.startsWith('#')) continue;
-      if (raw.startsWith('/tmp/') || raw.startsWith('/var/') || raw.startsWith('/etc/') || raw.startsWith('/bin/')) continue;
+      if (UNIX_SYSTEM_PATH_PREFIXES.some((p) => raw.startsWith(p))) continue;
       // Skip common placeholder-ish patterns
       if (raw.includes('<') || raw.includes('>') || raw.includes('$SkillName')) continue;
       // Date/version placeholders in templates

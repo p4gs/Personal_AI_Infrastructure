@@ -32,10 +32,11 @@ import {
   writeFileSync,
 } from "fs"
 import MiniSearch from "minisearch"
+import { homedir } from "node:os"
 
 // Path Construction
 
-const HOME = process.env.HOME ?? "~"
+const HOME = homedir()
 const PAI_DIR = join(HOME, ".claude", "PAI")
 const DOCUMENTATION_DIR = join(PAI_DIR, "DOCUMENTATION")
 const KNOWLEDGE_DIR = join(PAI_DIR, "MEMORY", "KNOWLEDGE")

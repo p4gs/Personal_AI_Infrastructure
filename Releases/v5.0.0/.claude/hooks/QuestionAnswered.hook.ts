@@ -37,16 +37,16 @@
  */
 
 import { setTabState, readTabState, stripPrefix } from './lib/tab-setter';
+import { readStdinWithTimeout } from './lib/stdin';
 
 async function main() {
   try {
     // Extract session_id from stdin for correct tab targeting
     let sessionId: string | undefined;
     try {
-      const raw = await Promise.race([
-        Bun.stdin.text(),
-        new Promise<string>((_, reject) => setTimeout(() => reject(new Error('stdin timeout')), 2000)),
-      ]);
+      // Cross-platform stdin (process.stdin, not Bun.stdin) — see lib/stdin.ts.
+      // 2000ms budget preserved (helper resolves with whatever arrived by then).
+      const raw = await readStdinWithTimeout(2000);
       if (raw.trim()) {
         const parsed = JSON.parse(raw);
         sessionId = parsed.session_id;

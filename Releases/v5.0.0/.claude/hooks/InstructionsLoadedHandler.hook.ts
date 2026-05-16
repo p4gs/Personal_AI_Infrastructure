@@ -25,6 +25,7 @@
 import { existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
+import { drainStdin } from './lib/stdin';
 
 // ========================================
 // Configuration
@@ -123,16 +124,10 @@ async function appendIntegrityLog(entry: IntegrityLogEntry): Promise<void> {
 // ========================================
 
 async function main(): Promise<void> {
-  // Read and discard stdin (hook contract requires consuming it)
+  // Read and discard stdin (hook contract requires consuming it).
+  // Cross-platform drain (process.stdin, not Bun.stdin) — see lib/stdin.ts.
   try {
-    const reader = Bun.stdin.stream().getReader();
-    const readLoop = (async () => {
-      while (true) {
-        const { done } = await reader.read();
-        if (done) break;
-      }
-    })();
-    await Promise.race([readLoop, new Promise<void>(r => setTimeout(r, 200))]);
+    await drainStdin(200);
   } catch {
     // Stdin read failure is fine — we only need to audit files
   }

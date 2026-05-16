@@ -12,6 +12,42 @@ import type { InstallState, EngineEventHandler, DetectionResult, ExistingUserCon
 import { PAI_VERSION, ALGORITHM_VERSION, DEFAULT_VOICES } from "./types";
 import { detectSystem, detectExistingUserContent, scanApiKeys, validateElevenLabsKey } from "./detect";
 import { generateSettingsJson } from "./config-gen";
+import { getBashPath } from "../../../lib/platform";
+
+/**
+ * Spawn a bash script cross-platform.
+ *
+ * macOS/Linux: getBashPath() returns "bash" (on PATH) — identical to the
+ * previous `spawn("bash", ...)`, so behavior is byte-for-byte unchanged.
+ *
+ * Windows: the bun subprocess PATH frequently lacks Git Bash, so a bare
+ * spawn("bash") throws ENOENT. getBashPath() resolves a real bash.exe from
+ * Git for Windows locations (or PAI_BASH_PATH). Returns null → we surface a
+ * clean ENOENT-style 'error' event instead of crashing the installer.
+ */
+function spawnBash(args: string[], opts: Parameters<typeof spawn>[2]) {
+  const bash = getBashPath();
+  if (bash === null) {
+    // Windows with no resolvable bash. Synthesize a child-like object that
+    // emits 'error' so existing close/error handlers degrade gracefully.
+    const fake: any = {
+      on(event: string, cb: (arg?: unknown) => void) {
+        if (event === "error") {
+          queueMicrotask(() =>
+            cb(new Error(
+              "bash not found on Windows. Install Git for Windows or set PAI_BASH_PATH. " +
+              "Pulse lifecycle on Windows is handled by PAI/PULSE/manage.ps1 (Task Scheduler)."
+            ))
+          );
+        }
+        return fake;
+      },
+      kill() {},
+    };
+    return fake;
+  }
+  return spawn(bash, args, opts);
+}
 
 type ChoiceOption = {
   label: string;
@@ -602,6 +638,34 @@ function pathLooksLikeExistingClaudeRoot(claudeDir: string): boolean {
   return existsSync(join(claudeDir, "settings.json")) || existsSync(join(claudeDir, "skills"));
 }
 
+// Recursively copy src → dst, skipping files that throw EPERM (e.g. .env with
+// restricted ACLs on Windows). Returns the count of files skipped.
+function backupDirSafe(src: string, dst: string): number {
+  let skipped = 0;
+  mkdirSync(dst, { recursive: true });
+  let entries: import("fs").Dirent[];
+  try {
+    entries = readdirSync(src, { withFileTypes: true });
+  } catch {
+    return skipped;
+  }
+  for (const entry of entries) {
+    const srcPath = join(src, entry.name);
+    const dstPath = join(dst, entry.name);
+    try {
+      if (entry.isDirectory()) {
+        skipped += backupDirSafe(srcPath, dstPath);
+      } else if (entry.isFile()) {
+        cpSync(srcPath, dstPath);
+      }
+      // symlinks are skipped intentionally — they're recreated by install
+    } catch {
+      skipped++;
+    }
+  }
+  return skipped;
+}
+
 export async function moveExistingClaudeToBackup(
   state: InstallState,
   emit: EngineEventHandler
@@ -613,15 +677,16 @@ export async function moveExistingClaudeToBackup(
 
   try {
     mkdirSync(dirname(state.backupPath), { recursive: true });
-    cpSync(claudeDir, state.backupPath, { recursive: true });
+    const skipped = backupDirSafe(claudeDir, state.backupPath);
+    const skipNote = skipped > 0 ? ` (${skipped} restricted file(s) skipped)` : "";
     await emit({
       event: "message",
-      content: `Copied existing ~/.claude to ${state.backupPath.replace(homedir(), "~")} before installing the fresh tree.`,
+      content: `Copied existing ~/.claude to ${state.backupPath.replace(homedir(), "~")} before installing the fresh tree${skipNote}.`,
     });
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
-    await emit({ event: "message", content: `Could not back up ~/.claude before reinstall: ${reason}` });
-    throw err instanceof Error ? err : new Error(reason);
+    await emit({ event: "message", content: `Warning: backup incomplete — ${reason}. Continuing install.` });
+    // Don't throw — a partial backup is better than blocking the install
   }
 
   // The installer is executing from ~/.claude/PAI/PAI-Install right now.
@@ -1573,10 +1638,16 @@ async function isPulseRunning(): Promise<boolean> {
   }
 }
 
-// Install Pulse as a launchd agent via the canonical `PULSE/manage.sh install`.
-// Manage.sh substitutes __HOME__ in the public plist template, copies it to
-// ~/Library/LaunchAgents/com.pai.pulse.plist, and `launchctl load`s it.
+// Install Pulse as a system service via the canonical `PULSE/manage.sh install`.
+// On macOS: substitutes __HOME__ in the launchd plist and `launchctl load`s it.
+// On Windows: install.sh registers the Scheduled Task post-wizard; skip here to
+//             avoid a 10s timeout waiting for schtasks to start Pulse.
 async function installPulse(paiDir: string, emit: EngineEventHandler): Promise<boolean> {
+  if (process.platform === "win32") {
+    await emit({ event: "message", content: "Pulse (Windows): Scheduled Task will be registered by install.sh after wizard completes." });
+    return true;
+  }
+
   const pulseDir = join(paiDir, "PAI", "PULSE");
   const manageScript = join(pulseDir, "manage.sh");
 
@@ -1589,7 +1660,7 @@ async function installPulse(paiDir: string, emit: EngineEventHandler): Promise<b
 
   try {
     const installOk = await new Promise<boolean>((resolve) => {
-      const child = spawn("bash", [manageScript, "install"], {
+      const child = spawnBash([manageScript, "install"], {
         cwd: pulseDir,
         stdio: ["ignore", "pipe", "pipe"],
       });
@@ -1638,7 +1709,7 @@ async function reloadPulse(paiDir: string, emit: EngineEventHandler): Promise<vo
   if (!existsSync(homeLaunchAgent)) return;
   await emit({ event: "message", content: "Reloading Pulse to pick up new voice configuration..." });
   await new Promise<void>((resolve) => {
-    const child = spawn("bash", [manageScript, "restart"], {
+    const child = spawnBash([manageScript, "restart"], {
       cwd: dirname(manageScript),
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -1660,7 +1731,7 @@ async function installPulseMenuBar(paiDir: string, emit: EngineEventHandler): Pr
 
   try {
     const ok = await new Promise<boolean>((resolve) => {
-      const child = spawn("bash", [menuBarInstall], {
+      const child = spawnBash([menuBarInstall], {
         cwd: dirname(menuBarInstall),
         stdio: ["ignore", "pipe", "pipe"],
       });
@@ -2164,7 +2235,7 @@ async function restartPulse(paiDir: string): Promise<boolean> {
   const manage = join(paiDir, "PAI", "PULSE", "manage.sh");
   if (!existsSync(manage)) return false;
   return new Promise<boolean>((resolve) => {
-    const child = spawn("bash", [manage, "restart"], { cwd: dirname(manage), stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawnBash([manage, "restart"], { cwd: dirname(manage), stdio: ["ignore", "pipe", "pipe"] });
     const timer = setTimeout(() => { child.kill(); resolve(false); }, 15000);
     child.on("close", (code) => { clearTimeout(timer); resolve(code === 0); });
     child.on("error", () => { clearTimeout(timer); resolve(false); });

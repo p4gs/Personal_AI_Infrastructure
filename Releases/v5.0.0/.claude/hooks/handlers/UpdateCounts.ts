@@ -20,6 +20,7 @@ import { readFileSync, writeFileSync, readdirSync, existsSync, statSync } from '
 import { join } from 'path';
 import { execSync } from 'child_process';
 import { getPaiDir, getSettingsPath, getClaudeDir } from '../lib/paths';
+import { homedir } from "node:os"
 
 
 interface Counts {
@@ -182,6 +183,91 @@ function getCounts(paiDir: string): Counts {
 }
 
 /**
+ * Resolve the Claude Code OAuth access token across platforms.
+ *
+ * - macOS  (darwin): macOS Keychain via the `security` CLI. UNCHANGED from
+ *   the original implementation — byte-for-byte the same command + parse.
+ * - Windows (win32): Windows Credential Manager via `keytar` (already a
+ *   dependency in PAI/PULSE/package.json), then graceful fallback to the
+ *   ~/.claude/.credentials.json file, then a CLAUDE_CODE_OAUTH_TOKEN env/.env.
+ *   keytar is a native module — dynamic-import it so non-Windows never loads it.
+ * - Linux  (else): ~/.claude/.credentials.json file. UNCHANGED.
+ *
+ * Returns the access token string, or null if none could be obtained.
+ */
+async function resolveOAuthToken(): Promise<string | null> {
+  // ── macOS: unchanged Keychain path ──
+  if (process.platform === 'darwin') {
+    try {
+      const credJson = execSync(
+        'security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null',
+        { encoding: 'utf-8', timeout: 3000 }
+      ).trim();
+      return JSON.parse(credJson)?.claudeAiOauth?.accessToken ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  // ── Windows: keytar → credentials file → env/.env ──
+  if (process.platform === 'win32') {
+    // 1. Windows Credential Manager via keytar (mirrors the macOS service name).
+    try {
+      const keytar = await import('keytar');
+      const get = (keytar as any).default?.getPassword ?? (keytar as any).getPassword;
+      if (typeof get === 'function') {
+        const stored: string | null =
+          (await get('Claude Code-credentials', process.env.USERNAME || 'default')) ??
+          (await get('Claude Code-credentials', 'Claude Code-credentials'));
+        if (stored) {
+          try {
+            return JSON.parse(stored)?.claudeAiOauth?.accessToken ?? stored;
+          } catch {
+            return stored; // raw token stored without JSON wrapper
+          }
+        }
+      }
+    } catch {
+      /* keytar unavailable or no entry — fall through to file/.env */
+    }
+
+    // 2. Credentials file fallback (Claude Code may write it on Windows too).
+    try {
+      const credPath = join(homedir() || '', '.claude', '.credentials.json');
+      if (existsSync(credPath)) {
+        const credJson = readFileSync(credPath, 'utf-8').trim();
+        const tok = JSON.parse(credJson)?.claudeAiOauth?.accessToken;
+        if (tok) return tok;
+      }
+    } catch {
+      /* fall through to env/.env */
+    }
+
+    // 3. Explicit env / ~/.claude/.env fallback.
+    if (process.env.CLAUDE_CODE_OAUTH_TOKEN) return process.env.CLAUDE_CODE_OAUTH_TOKEN;
+    try {
+      const envPath = join(getClaudeDir(), '.env');
+      if (existsSync(envPath)) {
+        const m = readFileSync(envPath, 'utf-8').match(/^CLAUDE_CODE_OAUTH_TOKEN=(.+)$/m);
+        if (m?.[1]) return m[1].trim().replace(/^["']|["']$/g, '');
+      }
+    } catch {
+      /* give up gracefully */
+    }
+    return null;
+  }
+
+  // ── Linux/other: unchanged credentials-file path ──
+  try {
+    const credPath = join(homedir() || '', '.claude', '.credentials.json');
+    const credJson = readFileSync(credPath, 'utf-8').trim();
+    return JSON.parse(credJson)?.claudeAiOauth?.accessToken ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Refresh usage cache from Anthropic OAuth API.
  * Called by stop hook so status line never needs to make this 700ms API call.
  */
@@ -189,20 +275,11 @@ async function refreshUsageCache(paiDir: string): Promise<void> {
   const usageCachePath = join(paiDir, 'MEMORY/STATE/usage-cache.json');
 
   try {
-    // Extract OAuth token — macOS Keychain or Linux credentials file
-    let credJson: string;
-    if (process.platform === 'darwin') {
-      credJson = execSync(
-        'security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null',
-        { encoding: 'utf-8', timeout: 3000 }
-      ).trim();
-    } else {
-      const credPath = join(process.env.HOME || '', '.claude', '.credentials.json');
-      credJson = readFileSync(credPath, 'utf-8').trim();
-    }
-
-    const parsed = JSON.parse(credJson);
-    const token = parsed?.claudeAiOauth?.accessToken;
+    // Extract OAuth token cross-platform:
+    //   macOS  → Keychain via `security` CLI (UNCHANGED)
+    //   Windows→ Windows Credential Manager via keytar, then file/.env fallback
+    //   Linux  → ~/.claude/.credentials.json (UNCHANGED)
+    const token = await resolveOAuthToken();
     if (!token) return;
 
     const resp = await fetch('https://api.anthropic.com/api/oauth/usage', {

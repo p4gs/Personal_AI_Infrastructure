@@ -296,7 +296,8 @@ export async function runCLI(): Promise<void> {
     print(`  ${c.gray}and how you think. Two paths to do that:${c.reset}`);
     print("");
     print(`  ${c.lightBlue}${c.bold}Fast path — let the DA interview you:${c.reset}`);
-    print(`  ${c.gray}1.${c.reset} Run ${c.bold}source ~/.zshrc && pai${c.reset}${c.gray} to launch PAI.${c.reset}`);
+    const reloadCmd = process.platform === "win32" ? ". $PROFILE" : "source ~/.zshrc";
+    print(`  ${c.gray}1.${c.reset} Run ${c.bold}${reloadCmd} && pai${c.reset}${c.gray} to launch PAI.${c.reset}`);
     print(`  ${c.gray}2.${c.reset} Type ${c.bold}/interview${c.reset}${c.gray} — the DA walks through TELOS, identity, projects, preferences. Pause and resume anytime.${c.reset}`);
     print(`     ${c.gray}(Already have goals/journals/notes in Obsidian, Notion, etc.? Run the ${c.bold}Migrate${c.reset}${c.gray} skill first so the interview fills gaps instead of asking you to re-type.)${c.reset}`);
     print("");

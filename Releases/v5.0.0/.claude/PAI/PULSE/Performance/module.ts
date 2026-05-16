@@ -12,8 +12,9 @@
 
 import { join } from "path"
 import { existsSync, readFileSync } from "fs"
+import { homedir } from "node:os"
 
-const HOME = process.env.HOME ?? ""
+const HOME = homedir() ?? ""
 const PAI_DIR = join(HOME, ".claude", "PAI")
 const MEMORY_DIR = join(PAI_DIR, "MEMORY")
 const SESSION_COSTS_PATH = join(MEMORY_DIR, "OBSERVABILITY", "session-costs.jsonl")
@@ -277,7 +278,7 @@ export async function handlePerformanceRequest(req: Request): Promise<Response |
 async function handleAnthropicCostApi(): Promise<Response> {
   const { readFileSync, existsSync } = await import("fs")
   const { join } = await import("path")
-  const home = process.env.HOME ?? ""
+  const home = homedir() ?? ""
   const obsDir = join(home, ".claude", "PAI", "MEMORY", "OBSERVABILITY")
   const ledgerPath = join(obsDir, "anthropic-cost.jsonl")
   const sitesPath = join(obsDir, "anthropic-call-sites.json")

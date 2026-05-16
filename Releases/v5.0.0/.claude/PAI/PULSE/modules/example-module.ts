@@ -8,8 +8,9 @@
  */
 
 import { join } from "path"
+import { homedir } from "node:os"
 
-const HOME = process.env.HOME ?? ""
+const HOME = homedir() ?? ""
 const MODULE_NAME = "example"
 
 interface ModuleState {

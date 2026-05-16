@@ -18,8 +18,9 @@
 
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
+import { homedir } from "node:os"
 
-const HOME = process.env.HOME || "";
+const HOME = homedir() || "";
 const PAI_DIR = process.env.PAI_DIR || join(HOME, ".claude", "PAI");
 const USER_DIR = join(PAI_DIR, "USER");
 const TELOS_DIR = join(USER_DIR, "TELOS");

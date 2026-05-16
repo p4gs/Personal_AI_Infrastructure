@@ -16,6 +16,7 @@
 import { spawn } from "child_process"
 import { join } from "path"
 import { existsSync, readFileSync } from "fs"
+import { homedir, tmpdir } from "node:os"
 import { log } from "../lib"
 
 // ── Public Config Interface ──
@@ -162,7 +163,7 @@ function escapeRegex(str: string): string {
 }
 
 function loadPronunciations(customPath?: string): void {
-  const paiDir = join(process.env.HOME ?? "~", ".claude", "PAI")
+  const paiDir = join(homedir(), ".claude", "PAI")
   const userPronPath = customPath ?? join(paiDir, "USER", "pronunciations.json")
 
   try {
@@ -195,7 +196,7 @@ function applyPronunciations(text: string): string {
 // ── Voice Config from settings.json ──
 
 function loadVoiceConfigFromSettings(): LoadedVoiceConfig {
-  const settingsPath = join(process.env.HOME ?? "~", ".claude", "settings.json")
+  const settingsPath = join(homedir(), ".claude", "settings.json")
 
   try {
     if (!existsSync(settingsPath)) {
@@ -344,47 +345,114 @@ async function generateSpeech(
   return await response.arrayBuffer()
 }
 
+// ── Audio Player Resolution ──
+
+function resolveAudioPlayer(): { exe: string; args: (volume: number) => string[] } | null {
+  const platform = process.platform
+  if (platform === "darwin") {
+    return { exe: "/usr/bin/afplay", args: (v) => ["-v", v.toString()] }
+  }
+  if (platform === "win32") {
+    // ffplay is included with ffmpeg (the recommended Windows audio player)
+    for (const candidate of ["ffplay.exe", "ffplay"]) {
+      try {
+        const { execSync } = require("child_process") as typeof import("child_process")
+        execSync(`where ${candidate}`, { stdio: "ignore", timeout: 2000 })
+        return {
+          exe: candidate,
+          // ffplay: -nodisp (no window), -autoexit, -volume 0-100
+          args: (v) => ["-nodisp", "-autoexit", "-volume", Math.round(v * 100).toString()],
+        }
+      } catch { /* not found */ }
+    }
+    log("warn", "Voice: no audio player found on Windows (install ffmpeg for audio playback)")
+    return null
+  }
+  // Linux: try ffplay, then pw-play, then paplay, then aplay
+  for (const [cmd, mkArgs] of [
+    ["ffplay",  (v: number) => ["-nodisp", "-autoexit", "-volume", Math.round(v * 100).toString()]],
+    ["pw-play", (_v: number) => []],
+    ["paplay",  (_v: number) => []],
+    ["aplay",   (_v: number) => []],
+  ] as [string, (v: number) => string[]][]) {
+    try {
+      const { execSync } = require("child_process") as typeof import("child_process")
+      execSync(`command -v ${cmd}`, { stdio: "ignore", timeout: 2000 })
+      return { exe: cmd, args: mkArgs }
+    } catch { /* not found */ }
+  }
+  log("warn", "Voice: no audio player found on Linux")
+  return null
+}
+
 // ── Audio Playback ──
 
 async function playAudio(audioBuffer: ArrayBuffer, volume: number = FALLBACK_VOLUME): Promise<void> {
-  const tempFile = `/tmp/voice-${Date.now()}.mp3`
+  const tempFile = join(tmpdir(), `voice-${Date.now()}.mp3`)
 
   await Bun.write(tempFile, audioBuffer)
 
+  const player = resolveAudioPlayer()
+  if (!player) {
+    // Silently skip playback — warning already logged by resolveAudioPlayer
+    return
+  }
+
   return new Promise((resolve, reject) => {
-    const proc = spawn("/usr/bin/afplay", ["-v", volume.toString(), tempFile])
+    const playerArgs = [...player.args(volume), tempFile]
+    const proc = spawn(player.exe, playerArgs)
 
     proc.on("error", (error) => {
-      log("error", "Voice: error playing audio", { error: String(error) })
+      log("error", "Voice: error playing audio", { error: String(error), player: player.exe })
       reject(error)
     })
 
     proc.on("exit", (code) => {
-      spawn("/bin/rm", [tempFile])
+      // Clean up temp file cross-platform
+      try { require("fs").unlinkSync(tempFile) } catch { /* best-effort */ }
       if (code === 0) {
         resolve()
       } else {
-        reject(new Error(`afplay exited with code ${code}`))
+        reject(new Error(`${player.exe} exited with code ${code}`))
       }
     })
   })
 }
 
-// ── macOS Desktop Notification ──
+// ── Cross-platform Desktop Notification ──
 
 async function showDesktopNotification(title: string, message: string): Promise<void> {
   if (!voiceConfig.desktopNotifications) return
 
   try {
-    const escapedTitle = escapeForAppleScript(title)
-    const escapedMessage = escapeForAppleScript(message)
-    const script = `display notification "${escapedMessage}" with title "${escapedTitle}" sound name ""`
+    if (process.platform === "darwin") {
+      const escapedTitle = escapeForAppleScript(title)
+      const escapedMessage = escapeForAppleScript(message)
+      const script = `display notification "${escapedMessage}" with title "${escapedTitle}" sound name ""`
 
-    await new Promise<void>((resolve, reject) => {
-      const proc = spawn("/usr/bin/osascript", ["-e", script])
-      proc.on("error", reject)
-      proc.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`osascript exited ${code}`))))
-    })
+      await new Promise<void>((resolve, reject) => {
+        const proc = spawn("/usr/bin/osascript", ["-e", script])
+        proc.on("error", reject)
+        proc.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`osascript exited ${code}`))))
+      })
+    } else if (process.platform === "win32") {
+      // node-notifier for Windows Toast notifications
+      try {
+        const notifier = await import("node-notifier")
+        notifier.default.notify({ title: "PAI Pulse", message, sound: false })
+      } catch {
+        // node-notifier not installed — fall back to PowerShell toast
+        try {
+          const ps = `[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null; $t = [Windows.UI.Notifications.ToastTemplateType]::ToastText02; $x = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent($t); $x.GetElementsByTagName('text')[0].AppendChild($x.CreateTextNode('${title.replace(/'/g, "")}')) | Out-Null; $x.GetElementsByTagName('text')[1].AppendChild($x.CreateTextNode('${message.replace(/'/g, "")}')) | Out-Null; [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('PAI').Show([Windows.UI.Notifications.ToastNotification]::new($x))`
+          spawn("powershell.exe", ["-NoProfile", "-Command", ps], { stdio: "ignore" })
+        } catch { /* silent */ }
+      }
+    } else {
+      // Linux: try notify-send
+      try {
+        spawn("notify-send", [title, message], { stdio: "ignore" })
+      } catch { /* notify-send not available */ }
+    }
   } catch (error) {
     log("error", "Voice: notification display error", { error: String(error) })
   }
@@ -652,7 +720,7 @@ export async function handleVoiceRequest(req: Request): Promise<Response | null>
       // /notify/personality honest with whatever the user last selected.
       let voiceId: string | null = null
       try {
-        const settingsFile = join(process.env.HOME ?? "~", ".claude", "settings.json")
+        const settingsFile = join(homedir(), ".claude", "settings.json")
         const settings = JSON.parse(readFileSync(settingsFile, "utf-8"))
         const main = settings?.daidentity?.voices?.main
         const vid = (main?.voiceId || main?.VOICE_ID || main?.voice_id) as string | undefined

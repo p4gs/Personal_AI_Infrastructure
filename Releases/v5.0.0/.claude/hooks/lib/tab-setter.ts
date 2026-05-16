@@ -89,6 +89,10 @@ const GENERIC_PHASE_GERUNDS = new Set([
   'Recording the session learnings.',
 ]);
 import { paiPath } from './paths';
+// Cross-platform Kitty socket resolution. Returns null on Windows (Kitty is
+// not available there) so the hardcoded /tmp/kitty-$USER path is never built
+// on Windows. macOS/Linux behavior is identical to the previous literal.
+import { getKittySocketFsPath } from '../../lib/platform';
 
 const TAB_TITLES_DIR = paiPath('MEMORY', 'STATE', 'tab-titles');
 const KITTY_SESSIONS_DIR = paiPath('MEMORY', 'STATE', 'kitty-sessions');
@@ -101,6 +105,7 @@ const KITTY_SESSIONS_DIR = paiPath('MEMORY', 'STATE', 'kitty-sessions');
  */
 let kittenBinCached: string | null = null;
 function kittenBin(): string {
+  if (process.platform === 'win32') return '';
   if (kittenBinCached) return kittenBinCached;
   try {
     const path = execSync('command -v kitten', { encoding: 'utf-8', timeout: 1000 }).trim();
@@ -145,9 +150,9 @@ function getKittyEnv(sessionId?: string): { listenOn: string | null; windowId: s
   // This prevents escape-sequence IPC when KITTY_LISTEN_ON isn't propagated
   // to subprocess contexts (the root cause of terminal garbage in #493).
   if (!listenOn) {
-    const defaultSocket = `/tmp/kitty-${process.env.USER}`;
+    const defaultSocket = getKittySocketFsPath(); // null on Windows
     try {
-      if (existsSync(defaultSocket)) {
+      if (defaultSocket && existsSync(defaultSocket)) {
         listenOn = `unix:${defaultSocket}`;
       }
     } catch { /* silent */ }
@@ -205,14 +210,15 @@ interface SetTabOptions {
  * Runs opportunistically on each setTabState call (lightweight).
  */
 function cleanupStaleStateFiles(): void {
+  if (process.platform === 'win32') return;
   try {
     if (!existsSync(TAB_TITLES_DIR)) return;
     const files = readdirSync(TAB_TITLES_DIR).filter(f => f.endsWith('.json'));
     if (files.length === 0) return;
 
     // Get live window IDs from kitty via socket (prevents escape sequence leaks)
-    const defaultSocket = `/tmp/kitty-${process.env.USER}`;
-    const socketPath = process.env.KITTY_LISTEN_ON || (existsSync(defaultSocket) ? `unix:${defaultSocket}` : null);
+    const defaultSocket = getKittySocketFsPath(); // null on Windows
+    const socketPath = process.env.KITTY_LISTEN_ON || (defaultSocket && existsSync(defaultSocket) ? `unix:${defaultSocket}` : null);
     if (!socketPath) return; // No socket — skip cleanup to avoid escape sequence IPC
     const liveOutput = execSync(`kitten @ --to="${socketPath}" ls 2>/dev/null | jq -r ".[].tabs[].windows[].id" 2>/dev/null`, {
       encoding: 'utf-8', timeout: 2000,
@@ -231,6 +237,10 @@ function cleanupStaleStateFiles(): void {
 }
 
 export function setTabState(opts: SetTabOptions): void {
+  if (process.platform === 'win32') {
+    console.error(`[tab-setter] win32: no-op (Kitty not available on Windows)`);
+    return;
+  }
   const { title, state, previousTitle, sessionId } = opts;
   const colors = TAB_COLORS[state];
 
@@ -392,6 +402,10 @@ export function getSessionOneWord(sessionId: string): string | null {
  * Called on algorithm phase transitions.
  */
 export function setPhaseTab(phase: AlgorithmTabPhase, sessionId: string, summary?: string): void {
+  if (process.platform === 'win32') {
+    console.error(`[tab-setter] win32: no-op setPhaseTab (Kitty not available)`);
+    return;
+  }
   const config = PHASE_TAB_CONFIG[phase];
   if (!config) return;
 

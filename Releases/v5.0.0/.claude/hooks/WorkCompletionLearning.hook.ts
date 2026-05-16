@@ -54,8 +54,10 @@ import { join, dirname } from 'path';
 import { getISOTimestamp, getPSTDate } from './lib/time';
 import { getLearningCategory } from './lib/learning-utils';
 import { findArtifactPath } from './lib/isa-utils';
+import { homedir } from "node:os"
+import { readStdinWithTimeout } from './lib/stdin';
 
-const BASE_DIR = process.env.PAI_DIR || join(process.env.HOME!, '.claude', 'PAI');
+const BASE_DIR = process.env.PAI_DIR || join(homedir(), '.claude', 'PAI');
 const MEMORY_DIR = join(BASE_DIR, 'MEMORY');
 const STATE_DIR = join(MEMORY_DIR, 'STATE');
 const WORK_DIR = join(MEMORY_DIR, 'WORK');
@@ -262,10 +264,9 @@ async function main() {
     // empty or slow stdin. Proceed regardless since state is read from disk.
     let sessionId: string | undefined;
     try {
-      const input = await Promise.race([
-        Bun.stdin.text(),
-        new Promise<string>((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000))
-      ]);
+      // Cross-platform stdin (process.stdin, not Bun.stdin) — see lib/stdin.ts.
+      // 3000ms budget preserved (helper resolves with whatever arrived by then).
+      const input = await readStdinWithTimeout(3000);
       if (input && input.trim()) {
         const parsed = JSON.parse(input);
         sessionId = parsed.session_id;

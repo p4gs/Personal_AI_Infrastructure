@@ -92,7 +92,7 @@
           },
           {
             "type": "command",
-            "command": "$HOME/.claude/hooks/ContextReduction.hook.sh"
+            "command": "bun $HOME/.claude/hooks/ContextReduction.hook.ts"
           }
         ]
       },

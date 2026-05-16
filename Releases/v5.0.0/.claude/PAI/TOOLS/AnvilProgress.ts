@@ -3,6 +3,7 @@ import { createWriteStream, type WriteStream } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import process from "node:process";
+import { homedir } from "node:os"
 
 type Args = { slug: string; prompt?: string; model: string; timeoutMs: number; pulseUrl: string; temperature: number; maxTokens: number };
 type JsonRecord = Record<string, unknown>;
@@ -61,7 +62,7 @@ function validUrl(flag: string, value: string): string {
   try { return new URL(nonEmpty(flag, value)).toString(); }
   catch (error: unknown) { throw new Error(`${flag} must be a valid URL: ${String(error)}`); }
 }
-function homeDir(): string { const home = process.env.HOME; if (!home) throw new Error("HOME is not set"); return home; }
+function homeDir(): string { const home = homedir(); if (!home) throw new Error("HOME is not set"); return home; }
 async function ensureSlugDir(home: string, slug: string): Promise<Paths> {
   const slugDir = join(home, ".claude", "PAI", "MEMORY", "WORK", slug);
   await mkdir(slugDir, { recursive: true }); // Local artifact I/O is unbounded so errors can surface naturally.

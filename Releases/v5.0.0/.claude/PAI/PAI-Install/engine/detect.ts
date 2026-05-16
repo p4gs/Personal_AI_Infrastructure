@@ -8,6 +8,7 @@ import { execSync } from "child_process";
 import { existsSync, readFileSync } from "fs";
 import { homedir } from "os";
 import { join } from "path";
+import { isWindows, getDefaultShell } from "../../../lib/platform";
 import type { DetectionResult, ExistingUserContentDetection } from "./types";
 
 function tryExec(cmd: string): string | null {
@@ -21,7 +22,9 @@ function tryExec(cmd: string): string | null {
 }
 
 function detectOS(): DetectionResult["os"] {
-  const platform = process.platform === "darwin" ? "darwin" : "linux";
+  const platform: DetectionResult["os"]["platform"] =
+    process.platform === "darwin" ? "darwin" :
+    process.platform === "win32" ? "win32" : "linux";
   const arch = process.arch;
 
   let version = "";
@@ -31,6 +34,11 @@ function detectOS(): DetectionResult["os"] {
     const swVers = tryExec("sw_vers -productVersion");
     version = swVers || "";
     name = `macOS ${version}`;
+  } else if (platform === "win32") {
+    const ver = tryExec('powershell -NoProfile -Command "[System.Environment]::OSVersion.Version.ToString()"');
+    version = ver || "";
+    const caption = tryExec('powershell -NoProfile -Command "(Get-CimInstance Win32_OperatingSystem).Caption"');
+    name = caption || `Windows ${version}`;
   } else {
     const release = tryExec("cat /etc/os-release 2>/dev/null | grep PRETTY_NAME | cut -d= -f2 | tr -d '\"'");
     name = release || "Linux";
@@ -41,7 +49,22 @@ function detectOS(): DetectionResult["os"] {
 }
 
 function detectShell(): DetectionResult["shell"] {
-  const shellPath = process.env.SHELL || "/bin/sh";
+  // Route platform branching through the cross-platform abstraction.
+  // getDefaultShell() returns 'powershell.exe' on Windows and $SHELL (or
+  // /bin/sh) on macOS/Linux — preserving the exact Unix behavior below.
+  if (isWindows) {
+    const shellPath = getDefaultShell(); // 'powershell.exe'
+    // Prefer the resolved absolute path from `where` when available so the
+    // path field contains a real powershell location (still case-insensitive
+    // "powershell" either way).
+    const resolved = tryExec("where powershell.exe");
+    const psPath = resolved?.split(/\r?\n/)[0]?.trim() || shellPath;
+    const version =
+      tryExec('powershell -NoProfile -Command "$PSVersionTable.PSVersion.ToString()"') || "";
+    return { name: "powershell", version, path: psPath };
+  }
+
+  const shellPath = process.env.SHELL || getDefaultShell();
   const shellName = shellPath.split("/").pop() || "sh";
   const version = tryExec(`${shellPath} --version 2>&1 | head -1`) || "";
 
@@ -52,7 +75,10 @@ function detectTool(
   name: string,
   versionCmd: string
 ): { installed: boolean; version?: string; path?: string } {
-  const path = tryExec(`which ${name}`);
+  const whichCmd = isWindows ? "where" : "which";
+  const foundPath = tryExec(`${whichCmd} ${name}`);
+  // `where` on Windows may return multiple lines; take the first.
+  const path = foundPath?.split(/\r?\n/)[0]?.trim() || null;
   if (!path) return { installed: false };
 
   const versionOutput = tryExec(versionCmd);
@@ -349,8 +375,8 @@ export function detectSystem(): DetectionResult {
       claude: detectTool("claude", "claude --version 2>&1"),
       node: detectTool("node", "node --version"),
       brew: {
-        installed: tryExec("which brew") !== null,
-        path: tryExec("which brew") || undefined,
+        installed: !isWindows && tryExec("which brew") !== null,
+        path: !isWindows ? (tryExec("which brew") || undefined) : undefined,
       },
     },
     existing: detectExisting(home, paiDir, configDir),

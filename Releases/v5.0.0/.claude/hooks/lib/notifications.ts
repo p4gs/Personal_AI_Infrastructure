@@ -6,13 +6,15 @@
  */
 
 import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { join } from 'path';
+import { tmpdir } from 'node:os';
 import { getSettingsPath } from './paths';
 
 // ============================================================================
 // Session Timing
 // ============================================================================
 
-const SESSION_START_FILE = '/tmp/pai-session-start.txt';
+const SESSION_START_FILE = join(tmpdir(), 'pai-session-start.txt');
 
 export function recordSessionStart(): void {
   try { writeFileSync(SESSION_START_FILE, Date.now().toString()); } catch {}

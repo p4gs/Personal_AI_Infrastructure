@@ -13,8 +13,9 @@
  */
 
 import { join } from "path"
+import { homedir } from "node:os"
 
-const HOME = process.env.HOME ?? "~"
+const HOME = homedir()
 const PAI = join(HOME, ".claude", "PAI")
 const REGISTRY_PATH = join(PAI, "USER", "DA", "_registry.yaml")
 

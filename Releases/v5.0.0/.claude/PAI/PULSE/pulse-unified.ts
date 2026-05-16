@@ -20,7 +20,7 @@ import { parse } from "smol-toml"
 
 // ── Load .env before anything else ──
 
-const HOME = process.env.HOME ?? "~"
+const HOME = homedir()
 const PAI_DIR = join(HOME, ".claude", "PAI")
 const PULSE_DIR = join(PAI_DIR, "Pulse")
 
@@ -58,6 +58,7 @@ import {
 } from "./lib"
 
 import { startHooks, handleHooksRequestAsync, hooksHealth } from "./modules/hooks"
+import { homedir } from "node:os"
 
 // Conditional imports — modules may not exist yet during incremental migration
 let voiceModule: any = null

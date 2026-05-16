@@ -13,6 +13,7 @@ import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import type { ObservabilityTarget } from './identity';
 import { getEnvPath } from './paths';
+import { homedir } from "node:os"
 
 function readEnvOrPaiEnv(keys: readonly string[]): string {
   for (const k of keys) {
@@ -114,7 +115,7 @@ function cleanStaleSessions(): boolean {
  * merges with normalized fields, sorts ascending by timestamp, keeps last 200.
  */
 function collectEvents(): any[] {
-  const HOME = process.env.HOME || '';
+  const HOME = homedir() || '';
   // Per-source counts match Observability/observability.ts handleEventsRecentApi()
   const sources = [
     { path: join(HOME, '.claude', 'PAI', 'MEMORY', 'VOICE', 'voice-events.jsonl'), source: 'voice', count: 50 },

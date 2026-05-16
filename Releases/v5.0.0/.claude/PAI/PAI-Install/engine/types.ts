@@ -7,10 +7,10 @@
 
 export interface DetectionResult {
   os: {
-    platform: "darwin" | "linux";
+    platform: "darwin" | "linux" | "win32";
     arch: string;
     version: string;
-    name: string; // e.g., "macOS 15.2" or "Ubuntu 24.04"
+    name: string; // e.g., "macOS 15.2", "Ubuntu 24.04", or "Microsoft Windows 11 Home"
   };
   shell: {
     name: string;

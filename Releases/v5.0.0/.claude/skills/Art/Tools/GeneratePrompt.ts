@@ -19,6 +19,7 @@
 
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { homedir } from "node:os"
 
 // ============================================================================
 // Types
@@ -68,7 +69,7 @@ interface PromptOutput {
 // ============================================================================
 
 const ART_AESTHETIC_PATH = resolve(
-  process.env.HOME!,
+  homedir(),
   ".claude/PAI/Aesthetic.md"
 );
 

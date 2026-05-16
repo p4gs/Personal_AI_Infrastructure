@@ -18,8 +18,9 @@
 
 import { readFileSync, writeFileSync, existsSync } from "fs";
 import { join } from "path";
+import { homedir } from "node:os"
 
-const HOME = process.env.HOME || "";
+const HOME = homedir() || "";
 const PAI_DIR = process.env.PAI_DIR || join(HOME, ".claude", "PAI");
 const QUEUE_FILE = join(PAI_DIR, "USER", "TELOS", "CURRENT_STATE", "proposals.jsonl");
 const CURRENT_STATE_DIR = join(PAI_DIR, "USER", "TELOS", "CURRENT_STATE");

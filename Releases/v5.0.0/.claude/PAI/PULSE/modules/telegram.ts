@@ -14,6 +14,7 @@ import { ConversationStore } from "../lib/conversation"
 import { sanitize, analyzeForInjection } from "../lib/sanitize"
 import { join } from "path"
 import { appendFile, mkdir } from "fs/promises"
+import { homedir } from "node:os"
 
 // BILLING: Strip ANTHROPIC_API_KEY before any SDK query() call. Bun auto-loads
 // ~/.claude/.env into this process; if the key is present, @anthropic-ai/claude-agent-sdk
@@ -35,7 +36,7 @@ export interface TelegramConfig {
 
 // ── Constants ──
 
-const HOME = process.env.HOME ?? ""
+const HOME = homedir() ?? ""
 const CWD = join(HOME, ".claude")
 const STATE_DIR = join(HOME, ".claude", "PAI", "PULSE", "state", "telegram")
 const LOGS_DIR = join(HOME, ".claude", "PAI", "PULSE", "logs", "telegram")

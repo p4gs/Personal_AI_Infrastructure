@@ -27,8 +27,10 @@
 import { existsSync, readFileSync, readdirSync } from 'fs';
 import { join, basename } from 'path';
 import { findArtifactPath } from './lib/isa-utils';
+import { homedir } from "node:os"
+import { readStdinWithTimeout } from './lib/stdin';
 
-const BASE_DIR = process.env.PAI_DIR || join(process.env.HOME!, '.claude', 'PAI');
+const BASE_DIR = process.env.PAI_DIR || join(homedir(), '.claude', 'PAI');
 const MEMORY_DIR = join(BASE_DIR, 'MEMORY');
 const STATE_DIR = join(MEMORY_DIR, 'STATE');
 const WORK_DIR = join(MEMORY_DIR, 'WORK');
@@ -92,7 +94,8 @@ async function main() {
   // Parse stdin
   let input: HookInput = {};
   try {
-    const stdin = await Bun.stdin.text();
+    // Cross-platform stdin (process.stdin, not Bun.stdin) — see lib/stdin.ts.
+    const stdin = await readStdinWithTimeout(500);
     if (stdin.trim()) {
       input = JSON.parse(stdin);
     }

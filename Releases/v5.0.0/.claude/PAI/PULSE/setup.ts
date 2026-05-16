@@ -12,8 +12,9 @@
 
 import { join, resolve } from "path"
 import { existsSync, mkdirSync } from "fs"
+import { homedir } from "node:os"
 
-const HOME = process.env.HOME ?? "~"
+const HOME = homedir()
 const PAI_DIR = join(HOME, ".claude", "PAI")
 const PULSE_DIR = join(PAI_DIR, "Pulse")
 
@@ -250,6 +251,14 @@ enabled = true
 async function setupLocalHTTPS(): Promise<void> {
   heading("Step 5: Local HTTPS (mkcert)")
 
+  // macOS-only: this step uses `sudo bash -c '… >> /etc/hosts'`, Homebrew,
+  // and the macOS system trust store. On Windows/Linux it must never run
+  // (no /etc/hosts sudo flow, no brew). Configure local HTTPS manually there.
+  if (process.platform !== "darwin") {
+    ok("Local HTTPS setup skipped (macOS-only step) — configure manually if needed")
+    return
+  }
+
   // Check if 'pai' hostname is in /etc/hosts
   const hostsContent = await Bun.file("/etc/hosts").text()
   const hasPaiHost = /^\s*127\.0\.0\.1\s+.*\bpai\b/m.test(hostsContent)
@@ -340,6 +349,15 @@ async function setupLocalHTTPS(): Promise<void> {
 
 async function installService(): Promise<void> {
   heading("Step 6: Installing launchd Service")
+
+  // macOS-only: this step copies a launchd plist into ~/Library/LaunchAgents
+  // and runs `launchctl load`. On Windows the Pulse service is a Task
+  // Scheduler job managed by PAI/PULSE/manage.ps1; on Linux it is a
+  // background/systemd process. Skip the launchd path everywhere but darwin.
+  if (process.platform !== "darwin") {
+    ok("launchd service skipped (macOS-only) — Windows uses Task Scheduler (manage.ps1)")
+    return
+  }
 
   // Create directories
   for (const dir of ["state", "logs"]) {

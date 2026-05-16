@@ -232,3 +232,8 @@ teams/
 default/
 surface-verify/
 skills/Art/Tools/node_modules/
+
+# Guard: unexpanded env-var literal directories (Windows port defect — see ISA windows11-v5-compat-verification)
+${HOME}/
+$HOME/
+%USERPROFILE%/

@@ -11,9 +11,10 @@
 
 import { readFileSync, writeFileSync, existsSync } from "fs";
 import { join } from "path";
+import { homedir } from "node:os"
 
 const STATE_FILE = join(
-  process.env.HOME || "",
+  homedir() || "",
   ".claude/PAI/MEMORY/STATE/last-prompt.json",
 );
 

@@ -50,6 +50,26 @@ async function main() {
       }
     }
 
+    // Verify the platform-specific Electron binary exists.
+    // `bun install --no-changes` skips postinstall scripts, so the binary may
+    // be missing or wrong-platform (e.g. Linux binary downloaded under WSL,
+    // then re-run on native Windows). Re-run install.js to fix it.
+    const electronBinName = process.platform === "win32" ? "electron.exe" : "electron";
+    const electronBin = join(electronDir, "node_modules", "electron", "dist", electronBinName);
+    if (!existsSync(electronBin)) {
+      console.log(`Electron binary not found for ${process.platform}. Downloading...\n`);
+      const download = spawnSync(process.execPath, ["node_modules/electron/install.js"], {
+        cwd: electronDir,
+        stdio: "inherit",
+      });
+      if (download.status !== 0 || !existsSync(electronBin)) {
+        console.error("\nFailed to download Electron binary. Falling back to CLI installer...\n");
+        const { runCLI } = await import("./cli/index");
+        await runCLI();
+        return;
+      }
+    }
+
     // Clear macOS quarantine flags (prevents "app is damaged" error on copied installs)
     if (process.platform === "darwin") {
       try {
@@ -67,7 +87,15 @@ async function main() {
     });
 
     child.on("exit", (code) => {
-      process.exit(code || 0);
+      if (code !== 0) {
+        console.error(`\nElectron exited with code ${code}. Falling back to CLI installer...\n`);
+        import("./cli/index").then(({ runCLI }) => runCLI()).catch((err) => {
+          console.error("CLI fallback failed:", err.message);
+          process.exit(1);
+        });
+      } else {
+        process.exit(0);
+      }
     });
   }
 }

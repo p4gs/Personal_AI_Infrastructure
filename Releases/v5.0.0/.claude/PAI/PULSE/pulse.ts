@@ -20,7 +20,7 @@ import { parse } from "smol-toml"
 
 // ── Load .env before anything else ──
 
-const HOME = process.env.HOME ?? "~"
+const HOME = homedir()
 const PAI_DIR = join(HOME, ".claude", "PAI")
 const PULSE_DIR = join(PAI_DIR, "PULSE")
 
@@ -66,6 +66,7 @@ import {
 } from "./lib"
 
 import { startHooks, handleHooksRequestAsync, hooksHealth } from "./modules/hooks"
+import { homedir } from "node:os"
 
 // Conditional imports — modules may not exist yet during incremental migration
 let voiceModule: any = null
@@ -294,10 +295,52 @@ function buildHealthResponse(state: DaemonState, config: PulseConfig): Response 
   })
 }
 
+// ── Keystore bootstrap ──
+// Load sensitive secrets from the OS credential store (Windows Credential
+// Manager / macOS Keychain / Linux Secret Service) and inject them into
+// process.env so all downstream modules pick them up transparently.
+// This runs AFTER the .env sync-load above, so keystore values override
+// any plaintext fallback — defense-in-depth. ANTHROPIC_API_KEY is
+// intentionally absent from this list; the billing guard above already
+// deleted it, and it should never live in the PAI keystore.
+
+const KEYSTORE_KEYS = [
+  "ELEVENLABS_API_KEY",
+  "TELEGRAM_BOT_TOKEN",
+  "TELEGRAM_PRINCIPAL_CHAT_ID",
+  "GITHUB_APP_ID",
+  "GITHUB_APP_PRIVATE_KEY_PATH",
+  "GITHUB_INSTALLATION_ID",
+  "OPENAI_API_KEY",
+  "OPENROUTER_API_KEY",
+  "CLAUDE_CODE_OAUTH_TOKEN",
+] as const
+
+async function loadSecretsFromKeystore(): Promise<void> {
+  try {
+    const keytar = (await import("keytar")).default
+    let loaded = 0
+    for (const key of KEYSTORE_KEYS) {
+      const value = await keytar.getPassword("PAI", key)
+      if (value !== null) {
+        process.env[key] = value
+        loaded++
+      }
+    }
+    if (loaded > 0) log("info", `Loaded ${loaded} secret(s) from OS keystore`)
+    else log("debug", "OS keystore: no PAI credentials found — using .env values")
+  } catch {
+    log("debug", "keytar unavailable — using .env values only (install keytar for OS keystore support)")
+  }
+}
+
 // ── Main ──
 
 async function main() {
   await Bun.write(PID_PATH, String(process.pid))
+
+  // Load secrets from OS keystore before anything else reads process.env
+  await loadSecretsFromKeystore()
 
   const config = await loadPulseConfig()
   let state = await readState(STATE_PATH)
@@ -388,8 +431,19 @@ async function main() {
       const pathname = url.pathname
 
       // Health (unified) — moved to /api/pulse/health to avoid conflict with Life Dashboard /health page
-      if (req.method === "GET" && (pathname === "/api/pulse/health" || pathname === "/healthz")) {
+      if (req.method === "GET" && (pathname === "/api/pulse/health" || pathname === "/healthz" || pathname === "/health")) {
         return buildHealthResponse(state, config)
+      }
+
+      // Graceful shutdown endpoint — Windows-compatible alternative to SIGTERM
+      if (req.method === "POST" && pathname === "/api/pulse/shutdown") {
+        log("info", "Shutdown requested via HTTP endpoint")
+        shutdown()
+        setTimeout(() => process.exit(0), 500)
+        return new Response(JSON.stringify({ status: "shutting_down" }), {
+          headers: { "Content-Type": "application/json" },
+          status: 200,
+        })
       }
 
       // Voice routes: /notify, /notify/personality, /voice

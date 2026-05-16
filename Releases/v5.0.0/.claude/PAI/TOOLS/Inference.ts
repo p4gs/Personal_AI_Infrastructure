@@ -58,6 +58,7 @@
  */
 
 import { spawn } from "child_process";
+import { homedir } from "node:os"
 
 export type InferenceLevel = 'fast' | 'standard' | 'smart';
 
@@ -253,7 +254,7 @@ export async function inference(options: InferenceOptions): Promise<InferenceRes
 export async function synthesizeAdvisorState(): Promise<string> {
   const fs = await import("fs/promises");
   const path = await import("path");
-  const home = process.env.HOME || process.env.USERPROFILE || "";
+  const home = homedir() || process.env.USERPROFILE || "";
   const workDir = path.join(home, ".claude", "PAI", "MEMORY", "WORK");
   const stateFile = path.join(home, ".claude", "PAI", "MEMORY", "STATE", "work.json");
 

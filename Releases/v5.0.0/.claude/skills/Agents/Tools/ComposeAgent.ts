@@ -31,9 +31,10 @@ import { parseArgs } from "util";
 import { readFileSync, existsSync, readdirSync, unlinkSync, mkdirSync, writeFileSync } from "fs";
 import { parse as parseYaml } from "yaml";
 import Handlebars from "handlebars";
+import { homedir } from "node:os"
 
 // Paths
-const HOME = process.env.HOME || "~";
+const HOME = homedir();
 const BASE_TRAITS_PATH = `${HOME}/.claude/skills/Agents/Data/Traits.yaml`;
 const USER_TRAITS_PATH = `${HOME}/.claude/PAI/USER/SKILLCUSTOMIZATIONS/Agents/Traits.yaml`;
 const TEMPLATE_PATH = `${HOME}/.claude/skills/Agents/Templates/DynamicAgent.hbs`;

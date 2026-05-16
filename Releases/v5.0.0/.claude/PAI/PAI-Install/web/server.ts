@@ -104,7 +104,7 @@ const server = Bun.serve({
   websocket: {
     open(ws) {
       addClient(ws);
-      ws.send(JSON.stringify({ type: "connected", port: PORT }));
+      ws.send(JSON.stringify({ type: "connected", port: PORT, platform: process.platform }));
     },
     message(ws, message) {
       resetInactivity();

@@ -31,8 +31,9 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync } from "fs";
 import { join } from "path";
 import { execSync } from "child_process";
+import { homedir } from "node:os"
 
-const HOME = process.env.HOME ?? "";
+const HOME = homedir() ?? "";
 const PAI_DIR = join(HOME, ".claude", "PAI");
 const OBS_DIR = join(PAI_DIR, "MEMORY", "OBSERVABILITY");
 const LEDGER_PATH = join(OBS_DIR, "anthropic-cost.jsonl");

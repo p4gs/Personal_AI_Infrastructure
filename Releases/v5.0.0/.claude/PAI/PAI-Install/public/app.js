@@ -8,6 +8,7 @@
 
 let ws = null;
 let connected = false;
+let serverPlatform = 'darwin';
 let voiceEnabled = true;
 let currentAudio = null;
 let steps = [
@@ -61,6 +62,7 @@ function handleServerMessage(msg) {
 
   switch (msg.type) {
     case 'connected':
+      if (msg.platform) serverPlatform = msg.platform;
       break;
 
     case 'step_update':
@@ -468,8 +470,8 @@ function renderSummary(summary) {
     <div class="summary-row"><span class="s-label">Install Type</span><span class="s-value">${installTypeLabel}</span></div>
     <div class="summary-action">
       <p>To activate PAI, open a terminal and run:</p>
-      <code>source ~/.zshrc && pai</code>
-      <p class="summary-hint">This reloads your shell config and launches PAI for the first time.</p>
+      <code>${serverPlatform === 'win32' ? '. $PROFILE' : 'source ~/.zshrc'} && pai</code>
+      <p class="summary-hint">${serverPlatform === 'win32' ? 'Reloads your PowerShell profile and launches PAI.' : 'This reloads your shell config and launches PAI for the first time.'}</p>
     </div>
   `;
   chat.appendChild(card);

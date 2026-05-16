@@ -18,6 +18,7 @@
 
 import { existsSync, mkdirSync, appendFileSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
+import { tmpdir } from 'node:os';
 import { paiPath, getSettingsPath } from './lib/paths';
 import { getISOTimestamp } from './lib/time';
 
@@ -42,7 +43,7 @@ interface ConfigChangeEvent {
 
 const OBS_DIR = paiPath('MEMORY', 'OBSERVABILITY');
 const AUDIT_FILE = join(OBS_DIR, 'config-changes.jsonl');
-const SNAPSHOT_PATH = '/tmp/pai-settings-snapshot.json';
+const SNAPSHOT_PATH = join(tmpdir(), 'pai-settings-snapshot.json');
 
 // Sensitive keys that warrant extra logging
 const SENSITIVE_KEYS = new Set([

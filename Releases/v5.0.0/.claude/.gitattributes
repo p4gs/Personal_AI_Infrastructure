@@ -1,6 +1,6 @@
 # Auto-detect text files and normalize line endings to LF
 * text=auto eol=lf
-# Explicitly mark script and config files as text with LF endings
+# Source code — always LF
 *.ts text eol=lf
 *.js text eol=lf
 *.sh text eol=lf
@@ -8,13 +8,26 @@
 *.json text eol=lf
 *.yaml text eol=lf
 *.yml text eol=lf
+*.toml text eol=lf
 *.html text eol=lf
 *.css text eol=lf
 *.vue text eol=lf
-# Binary files (don't modify)
+# Windows-native scripts — CRLF
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+# Binary files (no line ending conversion)
 *.png binary
 *.jpg binary
 *.jpeg binary
 *.gif binary
 *.ico binary
+*.webp binary
+*.mp3 binary
+*.mp4 binary
+*.wav binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
 *.pdf binary
+*.zip binary

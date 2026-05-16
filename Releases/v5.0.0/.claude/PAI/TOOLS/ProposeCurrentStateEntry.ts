@@ -20,8 +20,9 @@
 import { appendFileSync, mkdirSync, existsSync } from "fs";
 import { join, dirname } from "path";
 import { randomUUID } from "crypto";
+import { homedir } from "node:os"
 
-const HOME = process.env.HOME || "";
+const HOME = homedir() || "";
 const PAI_DIR = process.env.PAI_DIR || join(HOME, ".claude", "PAI");
 const QUEUE_FILE = join(PAI_DIR, "USER", "TELOS", "CURRENT_STATE", "proposals.jsonl");
 
